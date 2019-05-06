@@ -166,6 +166,8 @@ def plotHeatMap(filename, metric):
         df_Dtree_filtered = df_Dtree.loc[
                 (df_Dtree['Limit'] == limit) & \
                 (df_Dtree['Delay'] >= 5) & \
+                (df_Dtree['Delay'] <= 100) & \
+                (df_Dtree['BW'] <= 500) & \
                 (df_Dtree['BW'] >= 10)
                 ]
         
@@ -179,21 +181,9 @@ def plotHeatMap(filename, metric):
         xlabel = [str(v) for v in mat.columns.values]
         ylabel = [str(v) for v in mat.index.values]
      
-        
-        #vmin, vmax = max(min(heatMapDf[metric]), -100), min(max(heatMapDf[metric]), 100)
         vmin, vmax = min(heatMapDf[metric]), max(heatMapDf[metric])
 
-        color = 'RdBu_r'
-        
-        print(vmin, vmax)
-        #if metric == 'diffPct':
-        #    vmin, vmax = -20, 20
-        #elif metric == 'bLoss' or metric == 'diffLoss':
-        #    vmin, vmax = -20, 20
-        #elif metric == 'cLoss':
-        #    vmin, vmax, color = -20, 20, 'RdBu'
-        #else:
-        #    vmin, vmax = -100, 100
+        color = 'RdBu_r'        
 
         fig, ax = plt.subplots()
         sns.heatmap(mat, annot=True, fmt='.0f', cmap=color, square=True, cbar=False, 
