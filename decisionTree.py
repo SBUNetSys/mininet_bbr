@@ -29,7 +29,7 @@ import sys
 #expName = "tbf-exp-190425_164949" # 60s Exp 640 combiantions
 #expName = "tbf-exp-190426_034928"
 
-expName = ""
+expName = "tbf-exp-190505_130854"
 csvname = expName + "-DecisionTree.csv"
 
 df = pd.read_csv(expName + ".csv", header=0)
@@ -139,7 +139,7 @@ def dtModel(filename, seed):
     clf = DecisionTreeClassifier(
             splitter='best',
             max_features=3,
-            max_depth=3
+            max_depth=4
             )
 
     clf = clf.fit(X_train, y_train)
@@ -178,10 +178,14 @@ def plotHeatMap(filename, metric):
         
         xlabel = [str(v) for v in mat.columns.values]
         ylabel = [str(v) for v in mat.index.values]
-      
-        vmin, vmax = max(min(heatMapDf[metric]), -100), min(max(heatMapDf[metric]), 100)
+     
+        
+        #vmin, vmax = max(min(heatMapDf[metric]), -100), min(max(heatMapDf[metric]), 100)
+        vmin, vmax = min(heatMapDf[metric]), max(heatMapDf[metric])
+
         color = 'RdBu_r'
         
+        print(vmin, vmax)
         #if metric == 'diffPct':
         #    vmin, vmax = -20, 20
         #elif metric == 'bLoss' or metric == 'diffLoss':
