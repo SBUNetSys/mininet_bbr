@@ -17,7 +17,7 @@ import math
 import numpy as np
 from mininet_iperf import convertSize
 import sys
-
+import collections
 
 #expName = "tbf-exp-190403_205516"  # 10 Exp 1000 combinations(old)
 #expName = "tbf-exp-190402_200224"  # 10 Exp 1000 combinations(old)
@@ -30,6 +30,9 @@ import sys
 #expName = "tbf-exp-190426_034928"
 
 expName = "tbf-exp-190505_130854"
+#expName = "lan"
+#expName = "tbf-exp-190506_000828"
+
 csvname = expName + "-DecisionTree.csv"
 
 df = pd.read_csv(expName + ".csv", header=0)
@@ -46,6 +49,7 @@ print('Data size: ' + str(df.shape))
 label = {}
 label['bbr'] = 0
 label['cubic'] = 1
+#label['equal'] = 2
 
 features = ['Delay', 'BW', 'Limit']
 featuresLabel = ['RTT', 'BW', 'BufSize']
@@ -72,7 +76,8 @@ def mapping():
 # Make decisions
 def treeCSV():
     commonKeys = []  # Use an array to ensure the order
-    
+    threshold = 0.00
+
     for key in bbrBw.keys():
         if key in cubicBw.keys():
             bBw, cBw = bbrBw[key], cubicBw[key]
@@ -89,9 +94,9 @@ def treeCSV():
             # Record diff values in tuple
             tup = (bBw, cBw, diff, diffPct, bLoss, cLoss, diffLoss)
 
-            if bBw > cBw:
+            if bBw > (1 + threshold) * cBw:
                 dTree[key] = (label['bbr'], )
-            elif cBw > bBw:
+            elif cBw > (1 + threshold) * bBw:
                 dTree[key] = (label['cubic'], )
             else:
                 if bLoss <= cLoss:
@@ -119,13 +124,6 @@ def treeCSV():
 
     csvfile.close()
     print('Decision tree nodes: ' + str(len(dTree)))
-    
-
-#def alignWithBuf(val):
-#    bufs = [2e3, 5e3, 1e4, 5e5, 1e6, 2e6, 5e6, 1e7, 1e8, 6e8]
-#    for buf in bufs:
-#        if val <= buf:
-#            return buf
 
 
 # Creating the decision tree (model)
@@ -135,7 +133,7 @@ def dtModel(filename, seed):
     X = df_Dtree[features]
     y = df_Dtree.Decision
 
-    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.25, shuffle=True, random_state=seed)
+    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, shuffle=True, random_state=seed)
     clf = DecisionTreeClassifier(
             splitter='best',
             max_features=3,
@@ -166,8 +164,8 @@ def plotHeatMap(filename, metric):
         df_Dtree_filtered = df_Dtree.loc[
                 (df_Dtree['Limit'] == limit) & \
                 (df_Dtree['Delay'] >= 5) & \
-                (df_Dtree['Delay'] <= 100) & \
-                (df_Dtree['BW'] <= 500) & \
+                #(df_Dtree['Delay'] <= 100) & \
+                #(df_Dtree['BW'] <= 500) & \
                 (df_Dtree['BW'] >= 10)
                 ]
         
@@ -202,17 +200,57 @@ def plotHeatMap(filename, metric):
 # Plot
 def plotTree(clf, seed):
     dot_data = StringIO()
-    export_graphviz(clf, out_file=dot_data, proportion=False,
+    export_graphviz(clf, out_file=dot_data, proportion=False, node_ids=True,
                     filled=True, rounded=True, impurity=False, special_characters=True,
                     leaves_parallel=False,
                     feature_names=featuresLabel,
+                    #class_names=['bbr', 'cubic', 'equal'],
                     class_names=['bbr', 'cubic']
                     )
-
+    
     graph = pydotplus.graph_from_dot_data(dot_data.getvalue())
     
     graph.write_png(expName + '-' + str(seed) + '-DecisionTree.png')
     Image(graph.create_png())
+
+
+# Check LAN results
+def validateLAN(clf, lanFile):
+    df = pd.read_csv(lanFile)
+    rows, cols = df.shape
+
+    cc = {}
+    cc[0] = 'bbr'
+    cc[1] = 'cubic'
+    #cc[2] = 'equal'
+    correct, total = 0, 0
+    dic = collections.defaultdict(int)
+    
+    X, z = [], []
+    for i in range(rows):
+        rowData = df.iloc[i]
+        buf, bw, rtt, lanRes= rowData['Limit'], rowData['BW'], rowData['Delay'], int(rowData['Decision']) 
+        X.append([rtt, bw, buf])
+        z.append(lanRes)
+    
+    # y is the Mininet Classification
+    # z is the LAN decision
+    y = clf.predict(X)    
+    indices = clf.apply(X)
+    
+    for i in range(len(z)):
+        if y[i] == z[i]:
+            correct += 1
+        else:
+            #TODO log some information about wrong predictions
+            dic[indices[i]] += 1
+        total += 1
+
+    print(correct, total)
+    print(dic)
+    accuracy = correct * 1.0 / total * 100
+    print('Correctness: ' + str(accuracy) + '%')
+
 
 
 if __name__ == "__main__":
@@ -228,7 +266,8 @@ if __name__ == "__main__":
         treeCSV()
         clf = dtModel(filename=csvname, seed=seed)
         plotTree(clf=clf, seed=seed)
-    
+        validateLAN(clf, 'lan-DecisionTree.csv')
+
     plotHeatMap(filename=csvname, metric='diffPct')
     plotHeatMap(filename=csvname, metric='bLoss')
     plotHeatMap(filename=csvname, metric='cLoss')
